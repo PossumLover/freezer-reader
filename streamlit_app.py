@@ -33,6 +33,8 @@ def get_vision_client():
     # ---- Fallback: default application creds (local dev) -----------
     return vision.ImageAnnotatorClient()
 
+client = get_vision_client()
+
 # --------------------------------------------------
 # 1. Session-state helpers
 # --------------------------------------------------
