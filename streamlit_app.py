@@ -1,21 +1,37 @@
-# freezer_inventory_app.py
-import io
-import os
-from datetime import datetime
-
-import pandas as pd
+# ------------------------------------------------------------------
+# Google Vision client - works locally *and* on Streamlit Cloud
+# ------------------------------------------------------------------
 import streamlit as st
 from google.cloud import vision
-from PIL import Image
+from google.oauth2 import service_account
+import requests, base64
 
-# --------------------------------------------------
-# 0. Google Vision client (needs GOOGLE_APPLICATION_CREDENTIALS env-var)
-# --------------------------------------------------
 @st.cache_resource
 def get_vision_client():
-    return vision.ImageAnnotatorClient()
+    # ---- Option A: full service-account JSON in st.secrets ----------
+    if "gcp_service_account" in st.secrets:
+        creds_dict  = st.secrets["gcp_service_account"]
+        creds       = service_account.Credentials.from_service_account_info(creds_dict)
+        return vision.ImageAnnotatorClient(credentials=creds)
 
-client = get_vision_client()
+    # ---- Option B: plain API key in st.secrets ----------------------
+    if "gcp" in st.secrets and "api_key" in st.secrets["gcp"]:
+        class VisionViaREST:
+            """Tiny wrapper that mimics .text_detection() using API-key REST"""
+            def text_detection(self, image):
+                img_content = base64.b64encode(image.content).decode()
+                body = {"requests":[
+                    {"image":{"content":img_content},
+                     "features":[{"type":"TEXT_DETECTION"}]}]}
+                url = (f"https://vision.googleapis.com/v1/images:annotate"
+                       f"?key={st.secrets['gcp']['api_key']}")
+                r = requests.post(url, json=body, timeout=15)
+                r.raise_for_status()
+                return r.json()["responses"][0]
+        return VisionViaREST()
+
+    # ---- Fallback: default application creds (local dev) -----------
+    return vision.ImageAnnotatorClient()
 
 # --------------------------------------------------
 # 1. Session-state helpers
