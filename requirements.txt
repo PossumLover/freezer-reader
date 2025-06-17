@@ -1,2 +1,23 @@
+# UI and app framework
 streamlit
+
+# Google Cloud Vision API
 google-cloud-vision
+
+# Google authentication libraries
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+
+# HTTP requests
+requests
+urllib3
+
+# JSON and data handling (optional but common)
+pandas
+
+# Image processing (optional for vision work)
+Pillow
+
+# Environment variable management (optional)
+python-dotenv
