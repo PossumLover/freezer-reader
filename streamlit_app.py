@@ -1,197 +1,123 @@
-# ------------------------------------------------------------------
-# Google Video Intelligence client - works locally *and* on Streamlit Cloud
-# ------------------------------------------------------------------
 import streamlit as st
-from google.cloud import videointelligence
-from google.oauth2 import service_account
-import requests
-import base64
-import tempfile
 import os
+import base64
+import json
+import time
+from mistralai import Mistral
 
-@st.cache_resource
-def get_video_client():
-    # ---- Option A: full service-account JSON in st.secrets ----------
-    if "gcp_service_account" in st.secrets:
-        creds_dict = st.secrets["gcp_service_account"]
-        creds = service_account.Credentials.from_service_account_info(creds_dict)
-        return videointelligence.VideoIntelligenceServiceClient(credentials=creds)
+st.set_page_config(layout="wide", page_title="Mistral OCR App", page_icon="🖥️")
+st.title("Mistral OCR App")
+st.markdown("<h3 style color: white;'>Built by <a href='https://github.com/AIAnytime'>AI Anytime with ❤️ </a></h3>", unsafe_allow_html=True)
+with st.expander("Expand Me"):
+    st.markdown("""
+    This application allows you to extract information from pdf/image based on Mistral OCR. Built by AI Anytime.
+    """)
 
-    # ---- Option B: plain API key in st.secrets ----------------------
-    if "gcp" in st.secrets and "api_key" in st.secrets["gcp"]:
-        class VideoIntelligenceViaREST:
-            """Wrapper that uses Video Intelligence API via REST with API key"""
-            def annotate_video(self, request):
-                # Convert video content to base64
-                video_content = base64.b64encode(request.input_content).decode()
-                
-                body = {
-                    "input_content": video_content,
-                    "features": ["TEXT_DETECTION"]
-                }
-                
-                url = (f"https://videointelligence.googleapis.com/v1/videos:annotate"
-                       f"?key={st.secrets['gcp']['api_key']}")
-                
-                r = requests.post(url, json=body, timeout=60)
-                r.raise_for_status()
-                return r.json()
-        return VideoIntelligenceViaREST()
+# 1. API Key Input
+api_key = st.text_input("Enter your Mistral API Key", type="password")
+if not api_key:
+    st.info("Please enter your API key to continue.")
+    st.stop()
 
-    # ---- Fallback: default application creds (local dev) -----------
-    return videointelligence.VideoIntelligenceServiceClient()
+# Initialize session state variables for persistence
+if "ocr_result" not in st.session_state:
+    st.session_state["ocr_result"] = []
+if "preview_src" not in st.session_state:
+    st.session_state["preview_src"] = []
+if "image_bytes" not in st.session_state:
+    st.session_state["image_bytes"] = []
 
-client = get_video_client()
+# 2. Choose file type: PDF or Image
+file_type = st.radio("Select file type", ("PDF", "Image"))
 
-# --------------------------------------------------
-# Simple UI layout
-# --------------------------------------------------
-st.title("Video OCR with Google Cloud Video Intelligence")
+# 3. Select source type: URL or Local Upload
+source_type = st.radio("Select source type", ("URL", "Local Upload"))
 
-st.markdown(
-    "1. Upload a video file\n"
-    "2. Click **Process Video** to extract text\n"
-    "3. View the OCR results"
-)
+input_url = ""
+uploaded_files = []
 
-# Video uploader
-uploaded_file = st.file_uploader(
-    "Upload a video file",
-    type=["mp4", "mov", "avi", "mkv", "webm"],
-    accept_multiple_files=False,
-)
+if source_type == "URL":
+    input_url = st.text_area("Enter one or multiple URLs (separate with new lines)")
+else:
+    uploaded_files = st.file_uploader("Upload one or more files", type=["pdf", "jpg", "jpeg", "png"], accept_multiple_files=True)
 
-# --------------------------------------------------
-# Video OCR routine
-# --------------------------------------------------
-def process_video_ocr(video_bytes: bytes) -> str:
-    """Extract text from video using Google Cloud Video Intelligence API."""
-    try:
-        # Create the request
-        request = videointelligence.AnnotateVideoRequest(
-            input_content=video_bytes,
-            features=[videointelligence.Feature.TEXT_DETECTION],
-        )
+# 4. Process Button & OCR Handling
+if st.button("Process"):
+    if source_type == "URL" and not input_url.strip():
+        st.error("Please enter at least one valid URL.")
+    elif source_type == "Local Upload" and not uploaded_files:
+        st.error("Please upload at least one file.")
+    else:
+        client = Mistral(api_key=api_key)
+        st.session_state["ocr_result"] = []
+        st.session_state["preview_src"] = []
+        st.session_state["image_bytes"] = []
         
-        # Make the request
-        operation = client.annotate_video(request=request)
+        sources = input_url.split("\n") if source_type == "URL" else uploaded_files
         
-        # Wait for the operation to complete
-        st.info("Processing video... This may take a few minutes.")
-        result = operation.result(timeout=300)  # 5 minute timeout
-        
-        # Extract text annotations
-        text_annotations = result.annotation_results[0].text_annotations
-        
-        if not text_annotations:
-            return "No text detected in the video."
-        
-        # Collect all detected text
-        detected_texts = []
-        for text_annotation in text_annotations:
-            text = text_annotation.text
-            detected_texts.append(text)
-        
-        # Return concatenated text
-        return "\n".join(detected_texts)
-        
-    except Exception as e:
-        st.error(f"Error processing video: {str(e)}")
-        return ""
-
-def process_video_ocr_rest(video_bytes: bytes) -> str:
-    """Extract text from video using REST API with API key."""
-    try:
-        # Convert video content to base64
-        video_content = base64.b64encode(video_bytes).decode()
-        
-        body = {
-            "input_content": video_content,
-            "features": ["TEXT_DETECTION"]
-        }
-        
-        url = (f"https://videointelligence.googleapis.com/v1/videos:annotate"
-               f"?key={st.secrets['gcp']['api_key']}")
-        
-        st.info("Processing video... This may take a few minutes.")
-        r = requests.post(url, json=body, timeout=300)
-        r.raise_for_status()
-        
-        response = r.json()
-        
-        # Check if operation is complete or get operation name for polling
-        if "name" in response:
-            # Poll for completion
-            operation_name = response["name"]
-            operation_url = f"https://videointelligence.googleapis.com/v1/{operation_name}?key={st.secrets['gcp']['api_key']}"
-            
-            while True:
-                op_response = requests.get(operation_url, timeout=30)
-                op_response.raise_for_status()
-                op_data = op_response.json()
-                
-                if op_data.get("done", False):
-                    if "error" in op_data:
-                        return f"Error: {op_data['error']}"
-                    
-                    # Extract text from response
-                    annotation_results = op_data.get("response", {}).get("annotationResults", [])
-                    if not annotation_results:
-                        return "No text detected in the video."
-                    
-                    text_annotations = annotation_results[0].get("textAnnotations", [])
-                    if not text_annotations:
-                        return "No text detected in the video."
-                    
-                    detected_texts = [annotation.get("text", "") for annotation in text_annotations]
-                    return "\n".join(detected_texts)
-                
-                # Wait before polling again
-                st.info("Still processing...")
-                time.sleep(5)
-        
-        return "Unexpected response format."
-        
-    except Exception as e:
-        st.error(f"Error processing video: {str(e)}")
-        return ""
-
-# --------------------------------------------------
-# Process video when uploaded
-# --------------------------------------------------
-if uploaded_file is not None:
-    if st.button("Process Video"):
-        video_bytes = uploaded_file.getvalue()
-        
-        with st.spinner("Processing video with OCR..."):
-            if hasattr(client, 'annotate_video'):
-                # Using the official client
-                detected_text = process_video_ocr(video_bytes)
+        for idx, source in enumerate(sources):
+            if file_type == "PDF":
+                if source_type == "URL":
+                    document = {"type": "document_url", "document_url": source.strip()}
+                    preview_src = source.strip()
+                else:
+                    file_bytes = source.read()
+                    encoded_pdf = base64.b64encode(file_bytes).decode("utf-8")
+                    document = {"type": "document_url", "document_url": f"data:application/pdf;base64,{encoded_pdf}"}
+                    preview_src = f"data:application/pdf;base64,{encoded_pdf}"
             else:
-                # Using REST API wrapper
-                detected_text = process_video_ocr_rest(video_bytes)
-        
-        st.subheader("OCR Results:")
-        if detected_text:
-            st.text_area("Detected Text:", value=detected_text, height=200)
+                if source_type == "URL":
+                    document = {"type": "image_url", "image_url": source.strip()}
+                    preview_src = source.strip()
+                else:
+                    file_bytes = source.read()
+                    mime_type = source.type
+                    encoded_image = base64.b64encode(file_bytes).decode("utf-8")
+                    document = {"type": "image_url", "image_url": f"data:{mime_type};base64,{encoded_image}"}
+                    preview_src = f"data:{mime_type};base64,{encoded_image}"
+                    st.session_state["image_bytes"].append(file_bytes)
             
-            # Option to download the results
-            st.download_button(
-                "Download OCR Results",
-                detected_text,
-                file_name="video_ocr_results.txt",
-                mime="text/plain"
-            )
-        else:
-            st.warning("No text was detected in the video.")
+            with st.spinner(f"Processing {source if source_type == 'URL' else source.name}..."):
+                try:
+                    ocr_response = client.ocr.process(model="mistral-ocr-latest", document=document, include_image_base64=True)
+                    time.sleep(1)  # wait 1 second between request to prevent rate limit exceeding
+                    
+                    pages = ocr_response.pages if hasattr(ocr_response, "pages") else (ocr_response if isinstance(ocr_response, list) else [])
+                    result_text = "\n\n".join(page.markdown for page in pages) or "No result found."
+                except Exception as e:
+                    result_text = f"Error extracting result: {e}"
+                
+                st.session_state["ocr_result"].append(result_text)
+                st.session_state["preview_src"].append(preview_src)
 
-# --------------------------------------------------
-# Usage notes
-# --------------------------------------------------
-st.subheader("Notes:")
-st.markdown("""
-- Video processing can take several minutes depending on video length
-- Supported formats: MP4, MOV, AVI, MKV, WebM
-- The API works best with clear, readable text in the video
-- For freezer inventory, try to keep the camera steady and focus on labels
-""")
+# 5. Display Preview and OCR Results if available
+if st.session_state["ocr_result"]:
+    for idx, result in enumerate(st.session_state["ocr_result"]):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader(f"Input PDF {idx+1}")
+            if file_type == "PDF":
+                pdf_embed_html = f'<iframe src="{st.session_state["preview_src"][idx]}" width="100%" height="800" frameborder="0"></iframe>'
+                st.markdown(pdf_embed_html, unsafe_allow_html=True)
+            else:
+                if source_type == "Local Upload" and st.session_state["image_bytes"]:
+                    st.image(st.session_state["image_bytes"][idx])
+                else:
+                    st.image(st.session_state["preview_src"][idx])
+        
+        with col2:
+            st.subheader(f"Download OCR results {idx+1}")
+            
+            def create_download_link(data, filetype, filename):
+                b64 = base64.b64encode(data.encode()).decode()
+                href = f'<a href="data:{filetype};base64,{b64}" download="{filename}">Download {filename}</a>'
+                st.markdown(href, unsafe_allow_html=True)
+            
+            json_data = json.dumps({"ocr_result": result}, ensure_ascii=False, indent=2)
+            create_download_link(json_data, "application/json", f"Output_{idx+1}.json") # json output
+            create_download_link(result, "text/plain", f"Output_{idx+1}.txt") # plain text output
+            create_download_link(result, "text/markdown", f"Output_{idx+1}.md") # markdown output
+
+            # To preview results
+            st.write(st.session_state["ocr_result"])
