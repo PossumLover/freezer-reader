@@ -20,9 +20,19 @@ def markdown_table_to_dataframe(table_lines):
     data_rows = [r for r in rows[1:] if not all(re.match(r'^[-:]+$', c) for c in r)]
     if not data_rows:
         return None
-    num_cols = len(headers)
+    # Ensure unique column names to avoid PyArrow ValueError
+    seen = {}
+    unique_headers = []
+    for h in headers:
+        if h in seen:
+            seen[h] += 1
+            unique_headers.append(f"{h}_{seen[h]}" if h else f"_{seen[h]}")
+        else:
+            seen[h] = 0
+            unique_headers.append(h)
+    num_cols = len(unique_headers)
     data_rows = [r[:num_cols] + [''] * (num_cols - len(r)) for r in data_rows]
-    return pd.DataFrame(data_rows, columns=headers)
+    return pd.DataFrame(data_rows, columns=unique_headers)
 
 
 def parse_and_display_ocr(text):
