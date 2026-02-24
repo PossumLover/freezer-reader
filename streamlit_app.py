@@ -3,7 +3,75 @@ import os
 import base64
 import json
 import time
+import re
+import pandas as pd
 from mistralai import Mistral
+
+def markdown_table_to_dataframe(table_lines):
+    """Convert markdown table lines to a pandas DataFrame."""
+    rows = []
+    for line in table_lines:
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        rows.append(cells)
+    if len(rows) < 2:
+        return None
+    headers = rows[0]
+    # Skip separator rows (e.g. |---|:---:|---:|)
+    data_rows = [r for r in rows[1:] if not all(re.match(r'^[-:]+$', c) for c in r)]
+    if not data_rows:
+        return None
+    return pd.DataFrame(data_rows, columns=headers)
+
+
+def parse_and_display_ocr(text):
+    """Parse OCR markdown output and display tables interactively, other content as markdown."""
+    lines = text.split("\n")
+    buffer = []
+    table_lines = []
+    in_table = False
+
+    for line in lines:
+        is_table_line = line.strip().startswith("|") and line.strip().endswith("|")
+        if is_table_line:
+            if not in_table:
+                # Flush any non-table text
+                if buffer:
+                    st.markdown("\n".join(buffer))
+                    buffer = []
+                in_table = True
+            table_lines.append(line)
+        else:
+            if in_table:
+                # End of a table block — render it
+                df = markdown_table_to_dataframe(table_lines)
+                if df is not None:
+                    st.dataframe(
+                        df,
+                        use_container_width=True,
+                        selection_mode=["multi-row", "multi-column"],
+                        on_select="ignore",
+                    )
+                else:
+                    st.markdown("\n".join(table_lines))
+                table_lines = []
+                in_table = False
+            buffer.append(line)
+
+    # Flush remaining content
+    if in_table and table_lines:
+        df = markdown_table_to_dataframe(table_lines)
+        if df is not None:
+            st.dataframe(
+                df,
+                use_container_width=True,
+                selection_mode=["multi-row", "multi-column"],
+                on_select="ignore",
+            )
+        else:
+            st.markdown("\n".join(table_lines))
+    if buffer:
+        st.markdown("\n".join(buffer))
+
 
 st.set_page_config(layout="wide", page_title="Mistral OCR App", page_icon="🖥️")
 st.title("Mistral OCR App")
@@ -119,4 +187,4 @@ if st.session_state["ocr_result"]:
             create_download_link(result, "text/markdown", f"Output_{idx+1}.md") # markdown output
 
             # To preview results
-            st.write(st.session_state["ocr_result"])
+            parse_and_display_ocr(result)
