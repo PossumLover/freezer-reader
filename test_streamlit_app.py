@@ -87,3 +87,50 @@ def test_no_duplicates_unchanged():
     ]
     df = markdown_table_to_dataframe(lines)
     assert list(df.columns) == ["X", "Y", "Z"]
+
+
+def _get_api_key(environ_get, secrets_lookup):
+    """Replicate the API key retrieval logic from streamlit_app.py (avoids importing streamlit)."""
+    api_key = environ_get("MISTRAL_API_KEY")
+    if not api_key:
+        try:
+            api_key = secrets_lookup("MISTRAL_API_KEY")
+        except (KeyError, FileNotFoundError):
+            api_key = None
+    return api_key
+
+
+def test_api_key_from_env():
+    """API key found in environment variable should be returned."""
+    api_key = _get_api_key(
+        environ_get=lambda k: "env-key-123",
+        secrets_lookup=lambda k: (_ for _ in ()).throw(KeyError(k)),
+    )
+    assert api_key == "env-key-123"
+
+
+def test_api_key_from_secrets_fallback():
+    """When env var is missing, API key should fall back to Streamlit secrets."""
+    api_key = _get_api_key(
+        environ_get=lambda k: None,
+        secrets_lookup=lambda k: "secrets-key-456",
+    )
+    assert api_key == "secrets-key-456"
+
+
+def test_api_key_missing_everywhere():
+    """When neither env var nor secrets have the key, result should be None."""
+    api_key = _get_api_key(
+        environ_get=lambda k: None,
+        secrets_lookup=lambda k: (_ for _ in ()).throw(KeyError(k)),
+    )
+    assert api_key is None
+
+
+def test_api_key_secrets_file_not_found():
+    """When secrets file does not exist, FileNotFoundError should be caught."""
+    api_key = _get_api_key(
+        environ_get=lambda k: None,
+        secrets_lookup=lambda k: (_ for _ in ()).throw(FileNotFoundError()),
+    )
+    assert api_key is None
