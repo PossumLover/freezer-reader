@@ -3,6 +3,18 @@ import pandas as pd
 import pytest
 
 
+def replace_images_in_markdown(markdown_text, images):
+    """Copy of function under test (avoids importing streamlit)."""
+    if not images:
+        return markdown_text
+    for img in images:
+        img_id = img.get('id', '')
+        img_data = img.get('image_base64', '')
+        if img_id and img_data:
+            markdown_text = markdown_text.replace(f"]({img_id})", f"]({img_data})")
+    return markdown_text
+
+
 def markdown_table_to_dataframe(table_lines):
     """Copy of function under test (avoids importing streamlit)."""
     rows = []
@@ -134,3 +146,54 @@ def test_api_key_secrets_file_not_found():
         secrets_lookup=lambda k: (_ for _ in ()).throw(FileNotFoundError()),
     )
     assert api_key is None
+
+
+def test_replace_images_single():
+    """Single image reference should be replaced with base64 data URI."""
+    md = "Some text\n![figure.png](figure.png)\nMore text"
+    images = [{"id": "figure.png", "image_base64": "data:image/png;base64,abc123"}]
+    result = replace_images_in_markdown(md, images)
+    assert "](figure.png)" not in result
+    assert "](data:image/png;base64,abc123)" in result
+    assert "Some text" in result
+    assert "More text" in result
+
+
+def test_replace_images_multiple():
+    """Multiple image references should all be replaced."""
+    md = "![img1.png](img1.png) and ![img2.jpg](img2.jpg)"
+    images = [
+        {"id": "img1.png", "image_base64": "data:image/png;base64,AAA"},
+        {"id": "img2.jpg", "image_base64": "data:image/jpeg;base64,BBB"},
+    ]
+    result = replace_images_in_markdown(md, images)
+    assert "](img1.png)" not in result
+    assert "](img2.jpg)" not in result
+    assert "](data:image/png;base64,AAA)" in result
+    assert "](data:image/jpeg;base64,BBB)" in result
+
+
+def test_replace_images_no_images():
+    """When images list is empty or None, markdown should be unchanged."""
+    md = "![figure.png](figure.png)"
+    assert replace_images_in_markdown(md, []) == md
+    assert replace_images_in_markdown(md, None) == md
+
+
+def test_replace_images_no_matching_reference():
+    """When image id doesn't match any reference, markdown should be unchanged."""
+    md = "![figure.png](figure.png)"
+    images = [{"id": "other.png", "image_base64": "data:image/png;base64,xyz"}]
+    result = replace_images_in_markdown(md, images)
+    assert result == md
+
+
+def test_replace_images_preserves_non_image_content():
+    """Non-image markdown content should be preserved."""
+    md = "# Title\n\nSome paragraph\n\n![chart.png](chart.png)\n\n| Col |\n|---|\n| val |"
+    images = [{"id": "chart.png", "image_base64": "data:image/png;base64,CHART"}]
+    result = replace_images_in_markdown(md, images)
+    assert "# Title" in result
+    assert "Some paragraph" in result
+    assert "| Col |" in result
+    assert "](data:image/png;base64,CHART)" in result
