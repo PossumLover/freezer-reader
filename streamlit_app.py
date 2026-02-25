@@ -85,7 +85,7 @@ def parse_and_display_ocr(text):
         st.markdown("\n".join(buffer))
 
 
-st.set_page_config(layout="wide", page_title="Mistral OCR App", page_icon="🖥️")
+st.set_page_config(layout="wide", page_title="Tuber Tracker", page_icon="🥔")
 st.title("Tater Tracker OCR App")
 with st.expander("Expand Me"):
     st.markdown("""
@@ -115,7 +115,7 @@ if "image_bytes" not in st.session_state:
 file_type = st.radio("Select file type", ("PDF", "Image"))
 
 # 3. Select source type: URL or Local Upload
-source_type = st.radio("Select source type", ("URL", "Local Upload"))
+source_type = st.radio("Select source type", ("Local Upload", "URL"))
 
 input_url = ""
 uploaded_files = []
