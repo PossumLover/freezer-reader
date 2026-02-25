@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import os
 import base64
 import json
@@ -35,6 +36,75 @@ def markdown_table_to_dataframe(table_lines):
     return pd.DataFrame(data_rows, columns=unique_headers)
 
 
+_IMAGE_RE = re.compile(r'!\[([^\]]*)\]\(([^)]+)\)')
+
+
+def replace_images_in_markdown(markdown_text, images):
+    """Replace image filename references in markdown with actual base64 data URIs."""
+    if not images:
+        return markdown_text
+    for img in images:
+        img_id = img.id if hasattr(img, 'id') else img.get('id', '')
+        img_data = img.image_base64 if hasattr(img, 'image_base64') else img.get('image_base64', '')
+        if img_id and img_data:
+            markdown_text = markdown_text.replace(f"]({img_id})", f"]({img_data})")
+    return markdown_text
+
+
+def _flush_markdown_with_images(buffer):
+    """Render markdown lines, displaying embedded base64 images with st.image()."""
+    text_lines = []
+    for line in buffer:
+        m = _IMAGE_RE.search(line)
+        if m:
+            if text_lines:
+                st.markdown("\n".join(text_lines))
+                text_lines = []
+            img_src = m.group(2)
+            caption = m.group(1) or None
+            if img_src.startswith("data:"):
+                _, b64_data = img_src.split(",", 1)
+                st.image(base64.b64decode(b64_data), caption=caption)
+            else:
+                st.image(img_src, caption=caption)
+        else:
+            text_lines.append(line)
+    if text_lines:
+        st.markdown("\n".join(text_lines))
+
+
+def render_pdf(preview_src, height=800):
+    """Render a PDF with cross-browser compatibility (including Edge).
+
+    Edge blocks data: URIs in iframes, so for locally-uploaded PDFs we
+    convert the base64 payload to a Blob URL in JavaScript first.
+    """
+    if preview_src.startswith("data:"):
+        b64_data = json.dumps(preview_src.split(",", 1)[1])
+        html_code = (
+            '<div id="pdf-viewer" style="width:100%;height:100%;"></div>'
+            "<script>"
+            "(function(){"
+            f"var b64={b64_data};"
+            "var bin=atob(b64);"
+            "var u8=new Uint8Array(bin.length);"
+            "for(var i=0;i<bin.length;i++)u8[i]=bin.charCodeAt(i);"
+            'var blob=new Blob([u8],{type:"application/pdf"});'
+            "var url=URL.createObjectURL(blob);"
+            'document.getElementById("pdf-viewer").innerHTML='
+            '\'<iframe src="\'+url+\'" width="100%" height="100%" style="border:none;"></iframe>\';'
+            "})();"
+            "</script>"
+        )
+        components.html(html_code, height=height, scrolling=True)
+    else:
+        components.html(
+            f'<iframe src="{preview_src}" width="100%" height="100%" style="border:none;"></iframe>',
+            height=height,
+            scrolling=True,
+        )
+
+
 def parse_and_display_ocr(text):
     """Parse OCR markdown output and display tables interactively, other content as markdown."""
     lines = text.split("\n")
@@ -48,7 +118,7 @@ def parse_and_display_ocr(text):
             if not in_table:
                 # Flush any non-table text
                 if buffer:
-                    st.markdown("\n".join(buffer))
+                    _flush_markdown_with_images(buffer)
                     buffer = []
                 in_table = True
             table_lines.append(line)
@@ -82,7 +152,7 @@ def parse_and_display_ocr(text):
         else:
             st.markdown("\n".join(table_lines))
     if buffer:
-        st.markdown("\n".join(buffer))
+        _flush_markdown_with_images(buffer)
 
 
 st.set_page_config(layout="wide", page_title="Tuber Tracker", page_icon="🥔")
@@ -167,7 +237,13 @@ if st.button("Process"):
                     time.sleep(1)  # wait 1 second between request to prevent rate limit exceeding
                     
                     pages = ocr_response.pages if hasattr(ocr_response, "pages") else (ocr_response if isinstance(ocr_response, list) else [])
-                    result_text = "\n\n".join(page.markdown for page in pages) or "No result found."
+                    page_markdowns = []
+                    for page in pages:
+                        md = page.markdown
+                        if hasattr(page, 'images') and page.images:
+                            md = replace_images_in_markdown(md, page.images)
+                        page_markdowns.append(md)
+                    result_text = "\n\n".join(page_markdowns) or "No result found."
                 except Exception as e:
                     result_text = f"Error extracting result: {e}"
                 
@@ -182,8 +258,7 @@ if st.session_state["ocr_result"]:
         with col1:
             st.subheader(f"Input PDF {idx+1}")
             if file_type == "PDF":
-                pdf_embed_html = f'<iframe src="{st.session_state["preview_src"][idx]}" width="100%" height="800" frameborder="0"></iframe>'
-                st.markdown(pdf_embed_html, unsafe_allow_html=True)
+                render_pdf(st.session_state["preview_src"][idx])
             else:
                 if source_type == "Local Upload" and st.session_state["image_bytes"]:
                     st.image(st.session_state["image_bytes"][idx])
