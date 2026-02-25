@@ -92,10 +92,15 @@ with st.expander("Expand Me"):
     This application allows you to extract information from pdf/image based on Mistral OCR. Built by AI Anytime.
     """)
 
-# 1. API Key from environment variable
+# 1. API Key from environment variable or Streamlit secrets
 api_key = os.environ.get("MISTRAL_API_KEY")
 if not api_key:
-    st.error("MISTRAL_API_KEY environment variable is not set. Please set it before running the app.")
+    try:
+        api_key = st.secrets["MISTRAL_API_KEY"]
+    except (KeyError, FileNotFoundError):
+        api_key = None
+if not api_key:
+    st.error("MISTRAL_API_KEY is not set. Please set it as an environment variable or in Streamlit secrets before running the app.")
     st.stop()
 
 # Initialize session state variables for persistence
