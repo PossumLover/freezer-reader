@@ -92,11 +92,8 @@ with st.expander("Expand Me"):
     This application allows you to extract information from pdf/image based on Mistral OCR. Built by AI Anytime.
     """)
 
-# 1. API Key Input
-api_key = st.text_input("Enter your Mistral API Key", type="password")
-if not api_key:
-    st.info("Please enter your API key to continue.")
-    st.stop()
+# 1. API Key from secrets
+api_key = st.secrets["MISTRAL_API_KEY"]
 
 # Initialize session state variables for persistence
 if "ocr_result" not in st.session_state:
