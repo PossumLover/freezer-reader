@@ -86,10 +86,10 @@ def parse_and_display_ocr(text):
 
 
 st.set_page_config(layout="wide", page_title="Mistral OCR App", page_icon="🖥️")
-st.title("Mistral OCR App")
+st.title("Tater Tracker OCR App")
 with st.expander("Expand Me"):
     st.markdown("""
-    This application allows you to extract information from pdf/image based on Mistral OCR. Built by AI Anytime.
+    This application allows you to extract information from pdf/images, and convert them into an Excel-like format.
     """)
 
 # 1. API Key from environment variable or Streamlit secrets
