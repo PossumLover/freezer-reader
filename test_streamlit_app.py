@@ -115,6 +115,10 @@ def _get_api_key(environ_get, secrets_lookup):
     return api_key
 
 
+def _raise_key_error(key):
+    raise KeyError(key)
+
+
 def test_api_key_from_env():
     """API key found in environment variable should be returned."""
     api_key = _get_api_key(
@@ -174,7 +178,7 @@ def test_get_app_password_env_precedence(monkeypatch):
 def test_get_app_password_missing(monkeypatch):
     """Missing password in env and Streamlit secrets should return None."""
     monkeypatch.delenv("TUBER_TRACKER_PASSWORD", raising=False)
-    monkeypatch.setattr(auth, "_lookup_streamlit_secret", lambda k: (_ for _ in ()).throw(KeyError(k)))
+    monkeypatch.setattr(auth, "_lookup_streamlit_secret", _raise_key_error)
     assert get_app_password() is None
 
 
