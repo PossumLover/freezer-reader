@@ -12,6 +12,7 @@ def is_valid_password(entered_password, expected_password):
     return (
         isinstance(entered_password, str)
         and isinstance(expected_password, str)
+        and bool(entered_password)
         and bool(expected_password)
         and secrets.compare_digest(entered_password, expected_password)
     )

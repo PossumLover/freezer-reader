@@ -174,11 +174,6 @@ if not api_key:
     st.error("MISTRAL_API_KEY is not set. Please set it as an environment variable or in Streamlit secrets before running the app.")
     st.stop()
 
-app_password = get_app_password()
-if not app_password:
-    st.error("TUBER_TRACKER_PASSWORD is not set. Please set it as an environment secret before running the app.")
-    st.stop()
-
 # Initialize session state variables for persistence
 if "ocr_result" not in st.session_state:
     st.session_state["ocr_result"] = []
@@ -190,13 +185,20 @@ if "is_authenticated" not in st.session_state:
     st.session_state["is_authenticated"] = False
 
 if not st.session_state["is_authenticated"]:
-    entered_password = st.text_input("Enter password", type="password")
-    if st.button("Unlock"):
+    app_password = get_app_password()
+    if not app_password:
+        st.error("Application is not properly configured. Please contact the administrator.")
+        st.stop()
+
+    with st.form("unlock_form"):
+        entered_password = st.text_input("Application Password", type="password")
+        unlock_clicked = st.form_submit_button("Unlock")
+    if unlock_clicked:
         if is_valid_password(entered_password, app_password):
             st.session_state["is_authenticated"] = True
             st.rerun()
         else:
-            st.error("Incorrect password.")
+            st.error("Authentication failed.")
     st.stop()
 
 # 2. Choose file type: PDF or Image

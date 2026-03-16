@@ -166,6 +166,8 @@ def test_is_valid_password():
     """Password comparison should only pass on exact match."""
     assert is_valid_password("potato-pass", "potato-pass") is True
     assert is_valid_password("wrong", "potato-pass") is False
+    assert is_valid_password("", "potato-pass") is False
+    assert is_valid_password(None, "potato-pass") is False
     assert is_valid_password("potato-pass", None) is False
 
 
