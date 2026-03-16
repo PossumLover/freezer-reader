@@ -2,6 +2,7 @@ import re
 import inspect
 import pandas as pd
 import pytest
+import auth
 from auth import get_app_password, is_valid_password
 
 
@@ -156,9 +157,24 @@ def test_get_app_password_from_env(monkeypatch):
     assert get_app_password() == "potato-pass"
 
 
-def test_get_app_password_missing(monkeypatch):
-    """Missing password environment secret should return None."""
+def test_get_app_password_from_secrets_fallback(monkeypatch):
+    """Missing env var should fall back to Streamlit secrets."""
     monkeypatch.delenv("TUBER_TRACKER_PASSWORD", raising=False)
+    monkeypatch.setattr(auth, "_lookup_streamlit_secret", lambda k: "secret-potato-pass")
+    assert get_app_password() == "secret-potato-pass"
+
+
+def test_get_app_password_env_precedence(monkeypatch):
+    """Environment password should take precedence over Streamlit secrets."""
+    monkeypatch.setenv("TUBER_TRACKER_PASSWORD", "env-potato-pass")
+    monkeypatch.setattr(auth, "_lookup_streamlit_secret", lambda k: "secret-potato-pass")
+    assert get_app_password() == "env-potato-pass"
+
+
+def test_get_app_password_missing(monkeypatch):
+    """Missing password in env and Streamlit secrets should return None."""
+    monkeypatch.delenv("TUBER_TRACKER_PASSWORD", raising=False)
+    monkeypatch.setattr(auth, "_lookup_streamlit_secret", lambda k: (_ for _ in ()).throw(KeyError(k)))
     assert get_app_password() is None
 
 
