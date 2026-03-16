@@ -1,4 +1,5 @@
 import re
+import inspect
 import pandas as pd
 import pytest
 
@@ -197,3 +198,11 @@ def test_replace_images_preserves_non_image_content():
     assert "Some paragraph" in result
     assert "| Col |" in result
     assert "](data:image/png;base64,CHART)" in result
+
+
+def test_mistral_client_compat_import():
+    """Mistral client should be importable via local compatibility shim."""
+    from mistral_client import Mistral
+
+    assert Mistral is not None
+    assert "api_key" in inspect.signature(Mistral).parameters

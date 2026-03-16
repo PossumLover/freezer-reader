@@ -6,7 +6,7 @@ import json
 import time
 import re
 import pandas as pd
-from mistralai import Mistral
+from mistral_client import Mistral
 
 def markdown_table_to_dataframe(table_lines):
     """Convert markdown table lines to a pandas DataFrame."""
