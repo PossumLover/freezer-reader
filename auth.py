@@ -1,4 +1,5 @@
 import os
+import secrets
 
 
 def get_app_password():
@@ -8,4 +9,9 @@ def get_app_password():
 
 def is_valid_password(entered_password, expected_password):
     """Check entered password against the configured secret."""
-    return bool(expected_password) and entered_password == expected_password
+    return (
+        isinstance(entered_password, str)
+        and isinstance(expected_password, str)
+        and bool(expected_password)
+        and secrets.compare_digest(entered_password, expected_password)
+    )
