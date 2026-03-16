@@ -7,6 +7,7 @@ import time
 import re
 import pandas as pd
 from mistral_client import Mistral
+from auth import get_app_password, is_valid_password
 
 def markdown_table_to_dataframe(table_lines):
     """Convert markdown table lines to a pandas DataFrame."""
@@ -173,6 +174,11 @@ if not api_key:
     st.error("MISTRAL_API_KEY is not set. Please set it as an environment variable or in Streamlit secrets before running the app.")
     st.stop()
 
+app_password = get_app_password()
+if not app_password:
+    st.error("TUBER_TRACKER_PASSWORD is not set. Please set it as an environment secret before running the app.")
+    st.stop()
+
 # Initialize session state variables for persistence
 if "ocr_result" not in st.session_state:
     st.session_state["ocr_result"] = []
@@ -180,6 +186,18 @@ if "preview_src" not in st.session_state:
     st.session_state["preview_src"] = []
 if "image_bytes" not in st.session_state:
     st.session_state["image_bytes"] = []
+if "is_authenticated" not in st.session_state:
+    st.session_state["is_authenticated"] = False
+
+if not st.session_state["is_authenticated"]:
+    entered_password = st.text_input("Enter password", type="password")
+    if st.button("Unlock"):
+        if is_valid_password(entered_password, app_password):
+            st.session_state["is_authenticated"] = True
+            st.rerun()
+        else:
+            st.error("Incorrect password.")
+    st.stop()
 
 # 2. Choose file type: PDF or Image
 file_type = st.radio("Select file type", ("PDF", "Image"))
