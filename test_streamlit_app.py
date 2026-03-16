@@ -2,6 +2,7 @@ import re
 import inspect
 import pandas as pd
 import pytest
+from auth import get_app_password, is_valid_password
 
 
 def replace_images_in_markdown(markdown_text, images):
@@ -147,6 +148,27 @@ def test_api_key_secrets_file_not_found():
         secrets_lookup=lambda k: (_ for _ in ()).throw(FileNotFoundError()),
     )
     assert api_key is None
+
+
+def test_get_app_password_from_env(monkeypatch):
+    """App password should be read from environment secret."""
+    monkeypatch.setenv("TUBER_TRACKER_PASSWORD", "potato-pass")
+    assert get_app_password() == "potato-pass"
+
+
+def test_get_app_password_missing(monkeypatch):
+    """Missing password environment secret should return None."""
+    monkeypatch.delenv("TUBER_TRACKER_PASSWORD", raising=False)
+    assert get_app_password() is None
+
+
+def test_is_valid_password():
+    """Password comparison should only pass on exact match."""
+    assert is_valid_password("potato-pass", "potato-pass") is True
+    assert is_valid_password("wrong", "potato-pass") is False
+    assert is_valid_password("", "potato-pass") is False
+    assert is_valid_password(None, "potato-pass") is False
+    assert is_valid_password("potato-pass", None) is False
 
 
 def test_replace_images_single():

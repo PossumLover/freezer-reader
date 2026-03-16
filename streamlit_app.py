@@ -7,6 +7,7 @@ import time
 import re
 import pandas as pd
 from mistral_client import Mistral
+from auth import get_app_password, is_valid_password
 
 def markdown_table_to_dataframe(table_lines):
     """Convert markdown table lines to a pandas DataFrame."""
@@ -180,6 +181,25 @@ if "preview_src" not in st.session_state:
     st.session_state["preview_src"] = []
 if "image_bytes" not in st.session_state:
     st.session_state["image_bytes"] = []
+if "is_authenticated" not in st.session_state:
+    st.session_state["is_authenticated"] = False
+
+if not st.session_state["is_authenticated"]:
+    app_password = get_app_password()
+    if not app_password:
+        st.error("Application is not properly configured. Please contact the administrator.")
+        st.stop()
+
+    with st.form("unlock_form"):
+        entered_password = st.text_input("Application Password", type="password")
+        unlock_clicked = st.form_submit_button("Unlock")
+    if unlock_clicked:
+        if is_valid_password(entered_password, app_password):
+            st.session_state["is_authenticated"] = True
+            st.rerun()
+        else:
+            st.error("Authentication failed.")
+    st.stop()
 
 # 2. Choose file type: PDF or Image
 file_type = st.radio("Select file type", ("PDF", "Image"))
