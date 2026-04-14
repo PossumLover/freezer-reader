@@ -28,7 +28,7 @@ def markdown_table_to_dataframe(table_lines):
     data_rows = [r for r in rows[1:] if not all(re.match(r'^[-:]+$', c) for c in r)]
     if not data_rows:
         return None
-    num_cols = max([len(rows[0])] + [len(r) for r in data_rows])
+    num_cols = max(len(rows[0]), max(len(r) for r in data_rows))
     headers = rows[0][:num_cols] + [''] * (num_cols - len(rows[0]))
     seen = {}
     unique_headers = []
