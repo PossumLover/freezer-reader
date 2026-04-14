@@ -16,11 +16,15 @@ def markdown_table_to_dataframe(table_lines):
         rows.append(cells)
     if len(rows) < 2:
         return None
-    headers = rows[0]
     # Skip separator rows (e.g. |---|:---:|---:|)
     data_rows = [r for r in rows[1:] if not all(re.match(r'^[-:]+$', c) for c in r)]
     if not data_rows:
         return None
+    # OCR output can include a short title row as the first markdown row while
+    # subsequent rows contain more columns. Preserve the widest row to avoid
+    # truncating trailing columns in the rendered table.
+    num_cols = max(len(rows[0]), *(len(r) for r in data_rows))
+    headers = rows[0][:num_cols] + [''] * (num_cols - len(rows[0]))
     # Ensure unique column names to avoid PyArrow ValueError
     seen = {}
     unique_headers = []
@@ -31,7 +35,6 @@ def markdown_table_to_dataframe(table_lines):
         else:
             seen[h] = 0
             unique_headers.append(h)
-    num_cols = len(unique_headers)
     data_rows = [r[:num_cols] + [''] * (num_cols - len(r)) for r in data_rows]
     return pd.DataFrame(data_rows, columns=unique_headers)
 

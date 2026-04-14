@@ -25,10 +25,11 @@ def markdown_table_to_dataframe(table_lines):
         rows.append(cells)
     if len(rows) < 2:
         return None
-    headers = rows[0]
     data_rows = [r for r in rows[1:] if not all(re.match(r'^[-:]+$', c) for c in r)]
     if not data_rows:
         return None
+    num_cols = max(len(rows[0]), *(len(r) for r in data_rows))
+    headers = rows[0][:num_cols] + [''] * (num_cols - len(rows[0]))
     seen = {}
     unique_headers = []
     for h in headers:
@@ -38,7 +39,6 @@ def markdown_table_to_dataframe(table_lines):
         else:
             seen[h] = 0
             unique_headers.append(h)
-    num_cols = len(unique_headers)
     data_rows = [r[:num_cols] + [''] * (num_cols - len(r)) for r in data_rows]
     return pd.DataFrame(data_rows, columns=unique_headers)
 
@@ -101,6 +101,19 @@ def test_no_duplicates_unchanged():
     ]
     df = markdown_table_to_dataframe(lines)
     assert list(df.columns) == ["X", "Y", "Z"]
+
+
+def test_short_first_row_does_not_truncate_wider_rows():
+    """When first row has fewer cells, trailing columns should still be preserved."""
+    lines = [
+        "| Exp 55 and 56 | Variety - Ciklamen | Evaluation : Sprout Length |",
+        "| --- | --- | --- |",
+        "|  | Treatment | R1 | R2 | R3 | R4 | R5 |",
+        "| Exp 55 | 3601 | ○ | 1 | ○ | 1 | 1 |",
+    ]
+    df = markdown_table_to_dataframe(lines)
+    assert df.shape == (2, 7)
+    assert df.iloc[1, 6] == "1"
 
 
 def _get_api_key(environ_get, secrets_lookup):
