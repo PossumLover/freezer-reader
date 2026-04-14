@@ -23,7 +23,8 @@ def markdown_table_to_dataframe(table_lines):
     # OCR output can include a short title row as the first markdown row while
     # subsequent rows contain more columns. Preserve the widest row to avoid
     # truncating trailing columns in the rendered table.
-    num_cols = max(len(rows[0]), max(len(r) for r in data_rows))
+    max_data_cols = max(len(r) for r in data_rows)
+    num_cols = max(len(rows[0]), max_data_cols)
     headers = rows[0][:num_cols] + [''] * (num_cols - len(rows[0]))
     # Ensure unique column names to avoid PyArrow ValueError
     seen = {}
