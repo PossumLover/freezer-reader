@@ -100,7 +100,6 @@ def parse_and_display_ocr(text):
                         disabled=True,
                         hide_index=True,
                         use_container_width=True,
-                        num_rows="fixed",
                     )
                 else:
                     st.markdown("\n".join(table_lines))
@@ -117,7 +116,6 @@ def parse_and_display_ocr(text):
                 disabled=True,
                 hide_index=True,
                 use_container_width=True,
-                num_rows="fixed",
             )
         else:
             st.markdown("\n".join(table_lines))
