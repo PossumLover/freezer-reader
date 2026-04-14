@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import os
 import base64
 import json
@@ -74,38 +73,6 @@ def _flush_markdown_with_images(buffer):
         st.markdown("\n".join(text_lines))
 
 
-def render_pdf(preview_src, height=800):
-    """Render a PDF with cross-browser compatibility (including Edge).
-
-    Edge blocks data: URIs in iframes, so for locally-uploaded PDFs we
-    convert the base64 payload to a Blob URL in JavaScript first.
-    """
-    if preview_src.startswith("data:"):
-        b64_data = json.dumps(preview_src.split(",", 1)[1])
-        html_code = (
-            '<div id="pdf-viewer" style="width:100%;height:100%;"></div>'
-            "<script>"
-            "(function(){"
-            f"var b64={b64_data};"
-            "var bin=atob(b64);"
-            "var u8=new Uint8Array(bin.length);"
-            "for(var i=0;i<bin.length;i++)u8[i]=bin.charCodeAt(i);"
-            'var blob=new Blob([u8],{type:"application/pdf"});'
-            "var url=URL.createObjectURL(blob);"
-            'document.getElementById("pdf-viewer").innerHTML='
-            '\'<iframe src="\'+url+\'" width="100%" height="100%" style="border:none;"></iframe>\';'
-            "})();"
-            "</script>"
-        )
-        components.html(html_code, height=height, scrolling=True)
-    else:
-        components.html(
-            f'<iframe src="{preview_src}" width="100%" height="100%" style="border:none;"></iframe>',
-            height=height,
-            scrolling=True,
-        )
-
-
 def parse_and_display_ocr(text):
     """Parse OCR markdown output and display tables interactively, other content as markdown."""
     lines = text.split("\n")
@@ -128,11 +95,11 @@ def parse_and_display_ocr(text):
                 # End of a table block — render it
                 df = markdown_table_to_dataframe(table_lines)
                 if df is not None:
-                    st.dataframe(
+                    st.data_editor(
                         df,
+                        disabled=True,
+                        hide_index=True,
                         use_container_width=True,
-                        selection_mode=["multi-row", "multi-column"],
-                        on_select="ignore",
                     )
                 else:
                     st.markdown("\n".join(table_lines))
@@ -144,11 +111,11 @@ def parse_and_display_ocr(text):
     if in_table and table_lines:
         df = markdown_table_to_dataframe(table_lines)
         if df is not None:
-            st.dataframe(
+            st.data_editor(
                 df,
+                disabled=True,
+                hide_index=True,
                 use_container_width=True,
-                selection_mode=["multi-row", "multi-column"],
-                on_select="ignore",
             )
         else:
             st.markdown("\n".join(table_lines))
@@ -273,30 +240,21 @@ if st.button("Process"):
 # 5. Display Preview and OCR Results if available
 if st.session_state["ocr_result"]:
     for idx, result in enumerate(st.session_state["ocr_result"]):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader(f"Input PDF {idx+1}")
-            if file_type == "PDF":
-                render_pdf(st.session_state["preview_src"][idx])
+        st.subheader(f"OCR Results {idx+1}")
+        if file_type != "PDF":
+            if source_type == "Local Upload" and st.session_state["image_bytes"]:
+                st.image(st.session_state["image_bytes"][idx])
             else:
-                if source_type == "Local Upload" and st.session_state["image_bytes"]:
-                    st.image(st.session_state["image_bytes"][idx])
-                else:
-                    st.image(st.session_state["preview_src"][idx])
-        
-        with col2:
-            st.subheader(f"Download OCR results {idx+1}")
-            
-            def create_download_link(data, filetype, filename):
-                b64 = base64.b64encode(data.encode()).decode()
-                href = f'<a href="data:{filetype};base64,{b64}" download="{filename}">Download {filename}</a>'
-                st.markdown(href, unsafe_allow_html=True)
-            
-            json_data = json.dumps({"ocr_result": result}, ensure_ascii=False, indent=2)
-            create_download_link(json_data, "application/json", f"Output_{idx+1}.json") # json output
-            create_download_link(result, "text/plain", f"Output_{idx+1}.txt") # plain text output
-            create_download_link(result, "text/markdown", f"Output_{idx+1}.md") # markdown output
+                st.image(st.session_state["preview_src"][idx])
 
-            # To preview results
-            parse_and_display_ocr(result)
+        def create_download_link(data, filetype, filename):
+            b64 = base64.b64encode(data.encode()).decode()
+            href = f'<a href="data:{filetype};base64,{b64}" download="{filename}">Download {filename}</a>'
+            st.markdown(href, unsafe_allow_html=True)
+
+        json_data = json.dumps({"ocr_result": result}, ensure_ascii=False, indent=2)
+        create_download_link(json_data, "application/json", f"Output_{idx+1}.json") # json output
+        create_download_link(result, "text/plain", f"Output_{idx+1}.txt") # plain text output
+        create_download_link(result, "text/markdown", f"Output_{idx+1}.md") # markdown output
+
+        parse_and_display_ocr(result)
